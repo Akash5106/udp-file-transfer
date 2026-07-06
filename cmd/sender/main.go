@@ -46,6 +46,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer reader.Close()
+	seq := uint32(0)
 	for {
 		chunk, err := reader.NextChunk()
 		if err == io.EOF {
@@ -55,16 +56,30 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		packet := &protocol.Packet{
-			Flags:   protocol.FlagData,
-			Payload: chunk,
-		}
+		packet := protocol.NewDataPacket(seq, chunk)
 		data, err := packet.Marshal()
-		fmt.Printf("Sent packet (%d bytes)\n", len(data))
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("Sent packet %d (%d bytes)\n", packet.SeqNum, len(data))
 		_, err = conn.Write(data)
 		if err != nil {
 			fmt.Println("Error sending packet: ", err)
 			continue
 		}
+		buffer := make([]byte, 1024)
+		n, err := conn.Read(buffer)
+		if err != nil {
+			log.Fatal(err)
+		}
+		ack, err := protocol.Unmarshal(buffer[:n])
+		if err != nil {
+			log.Fatal(err)
+		}
+		if ack.Flags != protocol.FlagACK {
+			log.Fatal("expected ACK packet")
+		}
+		fmt.Printf("Received ACK %d\n", ack.AckNum)
+		seq++
 	}
 }

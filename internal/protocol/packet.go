@@ -25,6 +25,27 @@ const (
 	FlagFIN
 )
 
+func NewDataPacket(seq uint32, payload []byte) *Packet {
+	return &Packet{
+		SeqNum:  seq,
+		Flags:   FlagData,
+		Payload: payload,
+	}
+}
+
+func NewACKPacket(ack uint32) *Packet {
+	return &Packet{
+		AckNum: ack,
+		Flags:  FlagACK,
+	}
+}
+
+func NewFINPacket() *Packet {
+	return &Packet{
+		Flags: FlagFIN,
+	}
+}
+
 func computeChecksum(data []byte) uint32 {
 	return crc32.ChecksumIEEE(data)
 }

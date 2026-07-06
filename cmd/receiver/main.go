@@ -46,24 +46,44 @@ func main() {
 	defer writer.Close()
 	buffer := make([]byte, 1500)
 	for {
-		n, _, err := conn.ReadFromUDP(buffer)
+		n, addr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
-			fmt.Println("Error :", err)
+			fmt.Println("Error:", err)
 			continue
 		}
+
 		packet, err := protocol.Unmarshal(buffer[:n])
 		if err != nil {
-			fmt.Println("Error :", err)
+			fmt.Println("Error:", err)
 			continue
 		}
+
 		err = writer.WriteChunk(packet.Payload)
 		if err != nil {
-			fmt.Println("Error :", err)
+			fmt.Println("Error:", err)
 			continue
 		}
+
 		fmt.Printf(
-			"Received packet: payload=%d bytes\n",
-			len(packet.Payload),
+			"Received packet %d (%d bytes)\n",
+			packet.SeqNum,
+			packet.Length,
 		)
+
+		ack := protocol.NewACKPacket(packet.SeqNum)
+
+		ackData, err := ack.Marshal()
+		if err != nil {
+			fmt.Println("Error:", err)
+			continue
+		}
+
+		_, err = conn.WriteToUDP(ackData, addr)
+		if err != nil {
+			fmt.Println("Error:", err)
+			continue
+		}
+
+		fmt.Printf("Sent ACK %d\n", ack.AckNum)
 	}
 }
