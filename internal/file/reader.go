@@ -33,6 +33,6 @@ func (r *Reader) NextChunk() ([]byte, error) {
 	return buffer[:n], nil
 }
 
-func (r *Reader) CloseFile() error {
+func (r *Reader) Close() error {
 	return r.file.Close()
 }

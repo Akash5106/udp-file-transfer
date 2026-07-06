@@ -2,7 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net"
+
+	"github.com/Akash5106/udp-file-transfer/internal/file"
+	"github.com/Akash5106/udp-file-transfer/internal/protocol"
 )
 
 func main() {
@@ -17,21 +21,49 @@ func main() {
 		return
 	}
 	defer conn.Close()
-	fmt.Println(addr)
-	buffer := make([]byte, 1024)
+	// fmt.Println(addr)
+	// buffer := make([]byte, 1024)
+	// for {
+	// 	n, addr, err := conn.ReadFromUDP(buffer)
+	// 	if err != nil {
+	// 		fmt.Println(err)
+	// 		continue
+	// 	}
+	// 	fmt.Println("Received", n, "bytes of data from", addr)
+	// 	fmt.Println(string(buffer[:n]))
+	// 	_, err = conn.WriteToUDP(buffer[:n], addr)
+	// 	if err != nil {
+	// 		fmt.Println("Error sending mssg")
+	// 		continue
+	// 	}
+	// 	fmt.Println("ACK sent")
+	// }
+
+	writer, err := file.NewWriter("answer.txt")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer writer.Close()
+	buffer := make([]byte, 1500)
 	for {
-		n, addr, err := conn.ReadFromUDP(buffer)
+		n, _, err := conn.ReadFromUDP(buffer)
 		if err != nil {
-			fmt.Println(err)
+			fmt.Println("Error :", err)
 			continue
 		}
-		fmt.Println("Received", n, "bytes of data from", addr)
-		fmt.Println(string(buffer[:n]))
-		_, err = conn.WriteToUDP(buffer[:n], addr)
+		packet, err := protocol.Unmarshal(buffer[:n])
 		if err != nil {
-			fmt.Println("Error sending mssg")
+			fmt.Println("Error :", err)
 			continue
 		}
-		fmt.Println("ACK sent")
+		err = writer.WriteChunk(packet.Payload)
+		if err != nil {
+			fmt.Println("Error :", err)
+			continue
+		}
+		fmt.Printf(
+			"Received packet: payload=%d bytes\n",
+			len(packet.Payload),
+		)
 	}
 }
