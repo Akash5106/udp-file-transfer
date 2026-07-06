@@ -3,9 +3,12 @@ package protocol
 import (
 	"encoding/binary"
 	"errors"
+	"hash/crc32"
 )
 
 const HeaderSize = 15
+
+var ErrChecksumMismatch = errors.New("checksum mismatch")
 
 type Packet struct {
 	SeqNum   uint32
@@ -22,7 +25,11 @@ const (
 	FlagFIN
 )
 
-func (p *Packet) Marshal() []byte {
+func computeChecksum(data []byte) uint32 {
+	return crc32.ChecksumIEEE(data)
+}
+
+func (p *Packet) Marshal() ([]byte, error) {
 	p.Length = uint16(len(p.Payload))
 
 	buffer := make([]byte, HeaderSize+len(p.Payload))
@@ -31,16 +38,25 @@ func (p *Packet) Marshal() []byte {
 	binary.BigEndian.PutUint32(buffer[4:8], p.AckNum)
 	buffer[8] = p.Flags
 	binary.BigEndian.PutUint16(buffer[9:11], p.Length)
-	binary.BigEndian.PutUint32(buffer[11:15], p.Checksum)
-
+	binary.BigEndian.PutUint32(buffer[11:15], 0)
 	copy(buffer[HeaderSize:], p.Payload)
-
-	return buffer
+	checksum := computeChecksum(buffer)
+	p.Checksum = checksum
+	binary.BigEndian.PutUint32(buffer[11:15], p.Checksum)
+	return buffer, nil
 }
 
 func Unmarshal(buffer []byte) (*Packet, error) {
 	if len(buffer) < HeaderSize {
 		return nil, errors.New("packet too small")
+	}
+
+	storedChecksum := binary.BigEndian.Uint32(buffer[11:15])
+	binary.BigEndian.PutUint32(buffer[11:15], 0)
+	computedChecksum := computeChecksum(buffer)
+	binary.BigEndian.PutUint32(buffer[11:15], storedChecksum)
+	if computedChecksum != storedChecksum {
+		return nil, ErrChecksumMismatch
 	}
 
 	packet := &Packet{}
@@ -49,7 +65,7 @@ func Unmarshal(buffer []byte) (*Packet, error) {
 	packet.AckNum = binary.BigEndian.Uint32(buffer[4:8])
 	packet.Flags = buffer[8]
 	packet.Length = binary.BigEndian.Uint16(buffer[9:11])
-	packet.Checksum = binary.BigEndian.Uint32(buffer[11:15])
+	packet.Checksum = storedChecksum
 
 	if len(buffer) < HeaderSize+int(packet.Length) {
 		return nil, errors.New("truncated packet")

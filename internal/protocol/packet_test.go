@@ -2,19 +2,19 @@ package protocol
 
 import (
 	"bytes"
+	"errors"
 	"testing"
 )
 
 func TestMarshalUnmarshal(t *testing.T) {
 	original := &Packet{
-		SeqNum:   42,
-		AckNum:   17,
-		Flags:    FlagData,
-		Checksum: 12345,
-		Payload:  []byte("Hello UDP"),
+		SeqNum:  42,
+		AckNum:  17,
+		Flags:   FlagData,
+		Payload: []byte("Hello UDP"),
 	}
 
-	data := original.Marshal()
+	data, err := original.Marshal()
 
 	decoded, err := Unmarshal(data)
 	if err != nil {
@@ -43,5 +43,29 @@ func TestMarshalUnmarshal(t *testing.T) {
 
 	if !bytes.Equal(original.Payload, decoded.Payload) {
 		t.Errorf("Payload mismatch")
+	}
+
+}
+
+func TestChecksumMismatch(t *testing.T) {
+	packet := &Packet{
+		SeqNum:  1,
+		AckNum:  0,
+		Flags:   FlagData,
+		Payload: []byte("Hello World"),
+	}
+
+	data, err := packet.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Corrupt one byte in the payload.
+	data[HeaderSize] ^= 0xFF
+
+	_, err = Unmarshal(data)
+
+	if !errors.Is(err, ErrChecksumMismatch) {
+		t.Fatalf("expected checksum mismatch, got %v", err)
 	}
 }

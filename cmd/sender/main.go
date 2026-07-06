@@ -59,7 +59,7 @@ func main() {
 			Flags:   protocol.FlagData,
 			Payload: chunk,
 		}
-		data := packet.Marshal()
+		data, err := packet.Marshal()
 		fmt.Printf("Sent packet (%d bytes)\n", len(data))
 		_, err = conn.Write(data)
 		if err != nil {
