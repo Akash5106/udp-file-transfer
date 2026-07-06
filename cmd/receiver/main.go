@@ -45,6 +45,7 @@ func main() {
 	}
 	defer writer.Close()
 	buffer := make([]byte, 1500)
+	expectedSeq := uint32(0)
 	for {
 		n, addr, err := conn.ReadFromUDP(buffer)
 		if err != nil {
@@ -55,6 +56,21 @@ func main() {
 		packet, err := protocol.Unmarshal(buffer[:n])
 		if err != nil {
 			fmt.Println("Error:", err)
+			continue
+		}
+
+		if packet.SeqNum != expectedSeq {
+			fmt.Printf("Duplicate packet %d received. Sending ACK again.\n", packet.SeqNum)
+			ack := protocol.NewACKPacket(packet.SeqNum)
+			ackData, err := ack.Marshal()
+			if err != nil {
+				fmt.Println(err)
+				continue
+			}
+			_, err = conn.WriteToUDP(ackData, addr)
+			if err != nil {
+				fmt.Println(err)
+			}
 			continue
 		}
 
@@ -69,7 +85,11 @@ func main() {
 			packet.SeqNum,
 			packet.Length,
 		)
-
+		expectedSeq++
+		if packet.SeqNum == 5 {
+			fmt.Println("Dropping ACK 5")
+			continue
+		}
 		ack := protocol.NewACKPacket(packet.SeqNum)
 
 		ackData, err := ack.Marshal()
@@ -83,7 +103,6 @@ func main() {
 			fmt.Println("Error:", err)
 			continue
 		}
-
 		fmt.Printf("Sent ACK %d\n", ack.AckNum)
 	}
 }

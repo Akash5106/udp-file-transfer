@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"net"
+	"time"
 
 	"github.com/Akash5106/udp-file-transfer/internal/file"
 	"github.com/Akash5106/udp-file-transfer/internal/protocol"
@@ -47,6 +48,7 @@ func main() {
 	}
 	defer reader.Close()
 	seq := uint32(0)
+	buffer := make([]byte, 1024)
 	for {
 		chunk, err := reader.NextChunk()
 		if err == io.EOF {
@@ -61,25 +63,36 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		fmt.Printf("Sent packet %d (%d bytes)\n", packet.SeqNum, len(data))
-		_, err = conn.Write(data)
-		if err != nil {
-			fmt.Println("Error sending packet: ", err)
-			continue
+		for {
+			fmt.Printf("Sending packet %d\n", packet.SeqNum)
+			_, err = conn.Write(data)
+			if err != nil {
+				fmt.Println("Error sending packet: ", err)
+				continue
+			}
+			conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+			n, err := conn.Read(buffer)
+			if err != nil {
+				if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+					fmt.Println("ACK timeout... retransmitting")
+					continue
+				}
+				log.Fatal(err)
+			}
+			ack, err := protocol.Unmarshal(buffer[:n])
+			if err != nil {
+				log.Fatal(err)
+			}
+			if ack.Flags != protocol.FlagACK {
+				log.Fatal("expected ACK packet")
+			}
+			if ack.AckNum != packet.SeqNum {
+				fmt.Printf("Expected ACK %d but got ACK %d\n", packet.SeqNum, ack.AckNum)
+				continue
+			}
+			fmt.Printf("Received ACK %d\n", ack.AckNum)
+			break
 		}
-		buffer := make([]byte, 1024)
-		n, err := conn.Read(buffer)
-		if err != nil {
-			log.Fatal(err)
-		}
-		ack, err := protocol.Unmarshal(buffer[:n])
-		if err != nil {
-			log.Fatal(err)
-		}
-		if ack.Flags != protocol.FlagACK {
-			log.Fatal("expected ACK packet")
-		}
-		fmt.Printf("Received ACK %d\n", ack.AckNum)
 		seq++
 	}
 }
