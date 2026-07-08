@@ -6,7 +6,7 @@ import (
 	"net"
 
 	"github.com/Akash5106/udp-file-transfer/internal/file"
-	"github.com/Akash5106/udp-file-transfer/internal/protocol"
+	"github.com/Akash5106/udp-file-transfer/internal/transport"
 )
 
 func main() {
@@ -44,65 +44,9 @@ func main() {
 		log.Fatal(err)
 	}
 	defer writer.Close()
-	buffer := make([]byte, 1500)
-	expectedSeq := uint32(0)
-	for {
-		n, addr, err := conn.ReadFromUDP(buffer)
-		if err != nil {
-			fmt.Println("Error:", err)
-			continue
-		}
-
-		packet, err := protocol.Unmarshal(buffer[:n])
-		if err != nil {
-			fmt.Println("Error:", err)
-			continue
-		}
-
-		if packet.SeqNum != expectedSeq {
-			fmt.Printf("Duplicate packet %d received. Sending ACK again.\n", packet.SeqNum)
-			ack := protocol.NewACKPacket(packet.SeqNum)
-			ackData, err := ack.Marshal()
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-			_, err = conn.WriteToUDP(ackData, addr)
-			if err != nil {
-				fmt.Println(err)
-			}
-			continue
-		}
-
-		err = writer.WriteChunk(packet.Payload)
-		if err != nil {
-			fmt.Println("Error:", err)
-			continue
-		}
-
-		fmt.Printf(
-			"Received packet %d (%d bytes)\n",
-			packet.SeqNum,
-			packet.Length,
-		)
-		expectedSeq++
-		if packet.SeqNum == 5 {
-			fmt.Println("Dropping ACK 5")
-			continue
-		}
-		ack := protocol.NewACKPacket(packet.SeqNum)
-
-		ackData, err := ack.Marshal()
-		if err != nil {
-			fmt.Println("Error:", err)
-			continue
-		}
-
-		_, err = conn.WriteToUDP(ackData, addr)
-		if err != nil {
-			fmt.Println("Error:", err)
-			continue
-		}
-		fmt.Printf("Sent ACK %d\n", ack.AckNum)
+	receiver := transport.NewReceiver(conn, 4)
+	err = receiver.ReceiveFile(writer)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
