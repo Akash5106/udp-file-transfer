@@ -29,6 +29,21 @@ func (r *Receiver) inWindow(seq uint32) bool {
 		seq < r.expectedSeq+r.windowSize
 }
 
+func (r *Receiver) sendACK(seq uint32, addr *net.UDPAddr) error {
+	ack := protocol.NewACKPacket(seq)
+
+	ackData, err := ack.Marshal()
+	if err != nil {
+		return err
+	}
+
+	_, err = r.conn.WriteToUDP(ackData, addr)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *Receiver) ReceiveFile(writer *file.Writer) error {
 	buffer := make([]byte, 1500)
 	for {
@@ -41,21 +56,25 @@ func (r *Receiver) ReceiveFile(writer *file.Writer) error {
 		if err != nil {
 			return err
 		}
+		if packet.SeqNum < r.expectedSeq {
+			fmt.Printf("Old packet %d received. Sending ACK again.\n", packet.SeqNum)
 
+			err = r.sendACK(packet.SeqNum, addr)
+			if err != nil {
+				return err
+			}
+
+			continue
+		}
 		if !r.inWindow(packet.SeqNum) {
-			fmt.Printf("Not in window, Ignoring packet : %d", packet.SeqNum)
+			fmt.Printf("Not in window, Ignoring packet : %d\n", packet.SeqNum)
 			continue
 		}
 
 		_, exists := r.buffer[packet.SeqNum]
 		if exists {
 			fmt.Printf("Duplicate packet %d received\n", packet.SeqNum)
-			ack := protocol.NewACKPacket(packet.SeqNum)
-			ackData, err := ack.Marshal()
-			if err != nil {
-				return err
-			}
-			_, err = r.conn.WriteToUDP(ackData, addr)
+			err = r.sendACK(packet.SeqNum, addr)
 			if err != nil {
 				return err
 			}
@@ -63,14 +82,7 @@ func (r *Receiver) ReceiveFile(writer *file.Writer) error {
 		}
 
 		r.buffer[packet.SeqNum] = packet
-		ack := protocol.NewACKPacket(packet.SeqNum)
-
-		ackData, err := ack.Marshal()
-		if err != nil {
-			return err
-		}
-
-		_, err = r.conn.WriteToUDP(ackData, addr)
+		err = r.sendACK(packet.SeqNum, addr)
 		if err != nil {
 			return err
 		}
@@ -86,7 +98,7 @@ func (r *Receiver) ReceiveFile(writer *file.Writer) error {
 				return err
 			}
 			delete(r.buffer, r.expectedSeq)
-			fmt.Printf("Delivered packet : %d", p.SeqNum)
+			fmt.Printf("Delivered packet : %d\n", p.SeqNum)
 			r.expectedSeq++
 		}
 	}
