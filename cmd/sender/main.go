@@ -23,23 +23,6 @@ func main() {
 	}
 	defer conn.Close()
 
-	// message := []byte("Hello UDP")
-
-	// _, err = conn.Write(message)
-	// if err != nil {
-	// 	fmt.Println("Error sending message:", err)
-	// 	return
-	// }
-
-	// fmt.Println("Message sent!")
-	// buffer := make([]byte, 1024)
-	// n, addr, err := conn.ReadFromUDP(buffer)
-	// if err != nil {
-	// 	fmt.Println("Error receiving ACK")
-	// 	return
-	// }
-	// fmt.Println("ACK received from ", addr, " : ", string(buffer[:n]))
-
 	reader, err := file.NewReader("sample.txt", 20)
 	if err != nil {
 		log.Fatal(err)
