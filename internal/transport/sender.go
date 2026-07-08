@@ -80,7 +80,6 @@ func (s *Sender) SendFile(reader *file.Reader) error {
 			return err
 		}
 	}
-	return nil
 }
 
 func (s *Sender) receiveACKs() {
